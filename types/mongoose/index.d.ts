@@ -1,4 +1,4 @@
-// Type definitions for Mongoose 5.2.1
+// Type definitions for Mongoose 5.2.9
 // Project: http://mongoosejs.com/
 // Definitions by: horiuchi <https://github.com/horiuchi>
 //                 sindrenm <https://github.com/sindrenm>
@@ -10,6 +10,7 @@
 //                 jussikinnula <https://github.com/jussikinnula>
 //                 ondratra <https://github.com/ondratra>
 //                 alfirin <https://github.com/alfirin>
+//                 Idan Dardikman <https://github.com/idandrd>
 // Definitions: https://github.com/DefinitelyTyped/DefinitelyTyped
 // TypeScript Version: 2.3
 
@@ -151,7 +152,8 @@ declare module "mongoose" {
    * @param fn plugin callback
    * @param opts optional options
    */
-  export function plugin<T>(fn: Function, opts?: T): typeof mongoose;
+  export function plugin(fn: Function): typeof mongoose;
+  export function plugin<T>(fn: Function, opts: T): typeof mongoose;
 
   /** Sets mongoose options */
   export function set(key: string, value: any): void;
@@ -655,7 +657,8 @@ declare module "mongoose" {
      * Registers a plugin for this schema.
      * @param plugin callback
      */
-    plugin<T>(plugin: (schema: Schema, options?: T) => void, opts?: T): this;
+    plugin(plugin: (schema: Schema) => void): this;
+    plugin<T>(plugin: (schema: Schema, options: T) => void, opts: T): this;
 
     /**
      * Defines a post hook for the document
@@ -767,8 +770,8 @@ declare module "mongoose" {
      * @param key option name
      * @param value if not passed, the current option value is returned
      */
-    set(key: string): any;
-    set(key: string, value: any): this;
+    set<T extends keyof SchemaOptions>(key: T): SchemaOptions[T];
+    set<T extends keyof SchemaOptions>(key: T, value: SchemaOptions[T]): this;
 
     /**
      * Adds static "class" methods to Models compiled from this schema.
@@ -805,11 +808,11 @@ declare module "mongoose" {
 
   // Hook functions: https://github.com/vkarpov15/hooks-fixed
   interface HookSyncCallback<T> {
-    (this: T, next: HookNextFunction): Promise<any> | void;
+    (this: T, next: HookNextFunction, docs: any[]): Promise<any> | void;
   }
 
   interface HookAsyncCallback<T> {
-    (this: T, next: HookNextFunction, done: HookDoneFunction): Promise<any> | void;
+    (this: T, next: HookNextFunction, done: HookDoneFunction, docs: any[]): Promise<any> | void;
   }
 
   interface HookErrorCallback {
@@ -973,8 +976,10 @@ declare module "mongoose" {
      */
     validate?: RegExp | [RegExp, string] |
       SchemaTypeOpts.ValidateFn<T> | [SchemaTypeOpts.ValidateFn<T>, string] |
-      SchemaTypeOpts.ValidateOpts | SchemaTypeOpts.ValidateOpts[] |
-      SchemaTypeOpts.AsyncValidateOpts | SchemaTypeOpts.AsyncValidateOpts[];
+      SchemaTypeOpts.ValidateOpts | SchemaTypeOpts.AsyncValidateOpts |
+      SchemaTypeOpts.AsyncPromiseValidationFn<T> | SchemaTypeOpts.AsyncPromiseValidationOpts |
+      (SchemaTypeOpts.ValidateOpts | SchemaTypeOpts.AsyncValidateOpts |
+        SchemaTypeOpts.AsyncPromiseValidationFn<T> | SchemaTypeOpts.AsyncPromiseValidationOpts)[];
 
     /** Declares an unique index. */
     unique?: boolean | any;
@@ -1055,6 +1060,14 @@ declare module "mongoose" {
     interface AsyncValidateOpts extends ValidateOptsBase {
       isAsync: true;
       validator: AsyncValidateFn<any>;
+    }
+
+    interface AsyncPromiseValidationFn<T> {
+      (value: T): Promise<boolean>;
+    }
+
+    interface AsyncPromiseValidationOpts extends ValidateOptsBase {
+      validator: AsyncPromiseValidationFn<any>;
     }
 
     interface EnumOpts<T> {
@@ -1875,6 +1888,12 @@ declare module "mongoose" {
     read(pref: string, tags?: any[]): this;
 
     /**
+     * Sets the readConcern option for the query.
+     * @param level one of the listed read concern level or their aliases
+     */
+    readConcern(level: string): this;
+
+    /**
      * Specifies a $regex query condition.
      * When called with one argument, the most recent path passed to where() is used.
      */
@@ -1900,6 +1919,8 @@ declare module "mongoose" {
     selectedInclusively(): boolean;
     /** Sets query options. */
     setOptions(options: any): this;
+    /** Sets query conditions to the provided JSON object. */
+    setQuery(conditions: any): this;
 
     /**
      * Specifies a $size query condition.
@@ -2333,6 +2354,12 @@ declare module "mongoose" {
      */
     cursor(options: any): this;
 
+    /**
+     * Appends a new $facet operator to this aggregate pipeline.
+     * @param arg $facet operator contents
+     */
+    facet(arg: { [outputField: string]: object[] }): this;
+
     // If cursor option is on, could return an object
     /** Executes the aggregate pipeline on the currently bound Model. */
     exec(callback?: (err: any, result: T) => void): Promise<T> | any;
@@ -2405,6 +2432,13 @@ declare module "mongoose" {
      * @param tags optional tags for this query
      */
     read(pref: string, tags?: any[]): this;
+
+    /**
+     * Appends a new $replaceRoot operator to this aggregate pipeline.
+     * Note that the $replaceRoot operator requires field strings to start with '$'. If you are passing in a string Mongoose will prepend '$' if the specified field doesn't start '$'. If you are passing in an object the strings in your expression will not be altered.
+     * @param newRoot field or document which will become the new root document
+     */
+    replaceRoot(newRoot: string | object): this;
 
     /**
      * Appends new custom $sample operator(s) to this aggregate pipeline.
@@ -2983,6 +3017,8 @@ declare module "mongoose" {
     rawResult?: boolean;
     /** overwrites the schema's strict mode option for this update */
     strict?: boolean;
+    /** The context option lets you set the value of this in update validators to the underlying query. */
+    context?: string;
   }
 
   interface ModelFindOneAndUpdateOptions extends ModelFindByIdAndUpdateOptions {

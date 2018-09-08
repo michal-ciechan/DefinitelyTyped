@@ -1,10 +1,14 @@
 import Agenda = require("agenda");
-import { Db, Server } from "mongodb";
+import { Db, Server, MongoClient } from "mongodb";
 
 var mongoConnectionString = "mongodb://127.0.0.1/agenda";
 
 (async () => {
     var agenda = new Agenda({ db: { address: mongoConnectionString } });
+    var agenda = new Agenda({
+        mongo: (await MongoClient.connect(mongoConnectionString)).db(),
+        db: { collection: 'agenda-jobs' },
+    });
 
     agenda.define<{ foo: Error }>('delete old users', (job, done) => {
         done(job.attrs.data.foo)
@@ -67,6 +71,9 @@ var mongoConnectionString = "mongodb://127.0.0.1/agenda";
     await job.save();
 
     const jobs = await agenda.jobs({ name: 'printAnalyticsReport' });
+    jobs.forEach((job) => {
+        job.save();
+    });
 
     let numRemoved = await agenda.cancel({ name: 'printAnalyticsReport' });
 
@@ -77,6 +84,10 @@ var mongoConnectionString = "mongodb://127.0.0.1/agenda";
     await job.agenda.now('do the hokey pokey');
 
     job.repeatEvery('10 minutes');
+
+    job.repeatEvery('10 minutes', { timezone: 'America/New_York' });
+
+    job.repeatEvery('10 minutes', { skipImmediate: true });
 
     job.repeatAt('3:30pm');
 
